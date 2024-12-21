@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Trading Bot Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2196F3;
+            --success-color: #4CAF50;
+            --warning-color: #FFC107;
+            --danger-color: #F44336;
+            --bg-color: #1a1a1a;
+            --card-bg: #242424;
+            --text-color: #ffffff;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: var(--card-bg);
+            border-radius: 10px;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: var(--primary-color);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .info-card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .info-card h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .chart-container {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            height: 400px;
+            margin: 20px 0;
+        }
+
+        .value {
+            font-size: 1.2em;
+            font-weight: 500;
+        }
+
+        .positive {
+            color: var(--success-color);
+        }
+
+        .negative {
+            color: var(--danger-color);
+        }
+
+        .signal {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .signal.BUY {
+            background-color: rgba(76, 175, 80, 0.2);
+            border-left: 4px solid var(--success-color);
+            color: var(--success-color);
+        }
+
+        .signal.SELL {
+            background-color: rgba(244, 67, 54, 0.2);
+            border-left: 4px solid var(--danger-color);
+            color: var(--danger-color);
+        }
+
+        .trade-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .trade-button {
+            padding: 15px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .trade-button.buy {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .trade-button.sell {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        .trade-button:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .trade-button:active {
+            transform: translateY(0);
+        }
+
+        .market-state {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .market-state-item {
+            padding: 10px;
+            border-radius: 5px;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .market-state-item .label {
+            font-size: 0.9em;
+            color: #888;
+        }
+
+        .market-state-item .value {
+            font-size: 1.1em;
+            font-weight: 500;
+        }
+
+        .risk-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .risk-metric {
+            padding: 10px;
+            border-radius: 5px;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .strategy-info {
+            padding: 10px;
+            line-height: 1.5;
+        }
+        
+        .strategy-info ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .strategy-info li {
+            margin: 5px 0;
+            color: #e0e0e0;
+        }
+
+        .ai-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .ai-metric {
+            padding: 10px;
+            border-radius: 5px;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .ai-metric .label {
+            font-size: 0.9em;
+            color: #888;
+        }
+
+        .ai-metric .value {
+            font-size: 1.1em;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AI Trading Bot Dashboard</h1>
+            <div class="last-update">Son Güncelleme: <span id="last-update">-</span></div>
+        </div>
+        
+        <div class="dashboard-grid">
+            <div class="sidebar">
+                <!-- Pozisyon Bilgileri -->
+                <div class="info-card">
+                    <h3>Pozisyon</h3>
+                    <div>Durum: <span id="position-type">Yok</span></div>
+                    <div>Giriş Fiyatı: <span id="entry-price">-</span></div>
+                    <div>Güncel Fiyat: <span id="current-price">-</span></div>
+                    <div>Miktar: <span id="position-size">-</span></div>
+                    <div>Kar/Zarar: <span id="position-pnl">-</span></div>
+                </div>
+                
+                <!-- İşlem Butonları -->
+                <div class="info-card">
+                    <h3>Manuel İşlem</h3>
+                    <div class="trade-buttons">
+                        <button id="buy-button" class="trade-button buy">ALIŞ</button>
+                        <button id="sell-button" class="trade-button sell">SATIŞ</button>
+                    </div>
+                </div>
+                
+                <!-- Piyasa Durumu -->
+                <div class="info-card">
+                    <h3>Piyasa Durumu</h3>
+                    <div class="market-state">
+                        <div class="market-state-item">
+                            <div class="label">Trend</div>
+                            <div class="value" id="market-trend">-</div>
+                        </div>
+                        <div class="market-state-item">
+                            <div class="label">Volatilite</div>
+                            <div class="value" id="market-volatility">-</div>
+                        </div>
+                        <div class="market-state-item">
+                            <div class="label">Risk Seviyesi</div>
+                            <div class="value" id="risk-level">-</div>
+                        </div>
+                        <div class="market-state-item">
+                            <div class="label">Max Drawdown</div>
+                            <div class="value" id="max-drawdown">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Risk Metrikleri -->
+                <div class="info-card">
+                    <h3>Risk Metrikleri</h3>
+                    <div class="risk-metrics">
+                        <div class="risk-metric">
+                            <div class="label">Günlük PnL</div>
+                            <div class="value" id="daily-pnl">$0.00</div>
+                        </div>
+                        <div class="risk-metric">
+                            <div class="label">Max Drawdown</div>
+                            <div class="value" id="max-drawdown">$0.00</div>
+                        </div>
+                        <div class="risk-metric">
+                            <div class="label">Açık İşlemler</div>
+                            <div class="value" id="open-trades">0</div>
+                        </div>
+                        <div class="risk-metric">
+                            <div class="label">Günlük İşlemler</div>
+                            <div class="value" id="daily-trades">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Metrikleri -->
+                <div class="info-card">
+                    <h3>AI Metrikleri</h3>
+                    <div class="ai-metrics">
+                        <div class="ai-metric">
+                            <div class="label">Güven Oranı</div>
+                            <div class="value" id="ai-confidence">-</div>
+                        </div>
+                        <div class="ai-metric">
+                            <div class="label">Başarı Oranı</div>
+                            <div class="value" id="ai-success-rate">-</div>
+                        </div>
+                    </div>
+                    <div class="chart-container" style="height: 200px;">
+                        <div id="ai-performance-chart" style="width:100%; height:100%;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="main-content">
+                <!-- Fiyat Grafiği -->
+                <div class="chart-container">
+                    <div id="price-chart" style="width:100%; height:100%;"></div>
+                </div>
+                
+                <!-- Hacim Grafiği -->
+                <div class="chart-container">
+                    <div id="volume-chart" style="width:100%; height:100%;"></div>
+                </div>
+                
+                <!-- AI Performans Grafiği -->
+                <div class="chart-container">
+                    <div id="ai-performance-chart" style="width:100%; height:100%;"></div>
+                </div>
+                
+                <!-- İndikatör Grafikleri -->
+                <div class="chart-container">
+                    <div id="indicator-charts"></div>
+                </div>
+                
+                <!-- Sinyaller -->
+                <div class="info-card">
+                    <h3>İşlem Sinyalleri</h3>
+                    <div id="signals"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let priceChart = null;
+        let rsiChart = null;
+        let macdChart = null;
+        
+        function debugLog(message, data) {
+            console.log(message, data);
+        }
+        
+        function createCharts(data) {
+            const chartData = data.market_data.chart_data;
+            
+            // Ana fiyat grafiği
+            const priceTrace = {
+                x: chartData.index,
+                y: chartData.close,
+                type: 'scatter',
+                name: 'Fiyat',
+                line: {
+                    color: '#2196F3',
+                    width: 2
+                }
+            };
+            
+            const bbUpperTrace = {
+                x: chartData.index,
+                y: chartData.BB_upper,
+                type: 'scatter',
+                name: 'BB Üst',
+                line: {
+                    color: 'rgba(255, 255, 255, 0.3)',
+                    width: 1
+                }
+            };
+            
+            const bbMiddleTrace = {
+                x: chartData.index,
+                y: chartData.BB_middle,
+                type: 'scatter',
+                name: 'BB Orta',
+                line: {
+                    color: 'rgba(255, 255, 255, 0.3)',
+                    width: 1,
+                    dash: 'dash'
+                }
+            };
+            
+            const bbLowerTrace = {
+                x: chartData.index,
+                y: chartData.BB_lower,
+                type: 'scatter',
+                name: 'BB Alt',
+                line: {
+                    color: 'rgba(255, 255, 255, 0.3)',
+                    width: 1
+                }
+            };
+            
+            // RSI grafiği
+            const rsiTrace = {
+                x: chartData.index,
+                y: chartData.RSI,
+                type: 'scatter',
+                name: 'RSI',
+                yaxis: 'y2',
+                line: {
+                    color: '#FF9800',
+                    width: 2
+                }
+            };
+            
+            // MACD grafiği
+            const macdTrace = {
+                x: chartData.index,
+                y: chartData.MACD,
+                type: 'scatter',
+                name: 'MACD',
+                yaxis: 'y3',
+                line: {
+                    color: '#4CAF50',
+                    width: 2
+                }
+            };
+            
+            const macdSignalTrace = {
+                x: chartData.index,
+                y: chartData.MACD_Signal,
+                type: 'scatter',
+                name: 'Sinyal',
+                yaxis: 'y3',
+                line: {
+                    color: '#FF5252',
+                    width: 2
+                }
+            };
+            
+            // Grafik düzeni
+            const layout = {
+                grid: {
+                    rows: 3,
+                    columns: 1,
+                    pattern: 'independent',
+                    rowheight: [0.6, 0.2, 0.2]
+                },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: {
+                    color: '#ffffff'
+                },
+                xaxis: {
+                    gridcolor: 'rgba(255,255,255,0.1)',
+                    showgrid: true,
+                    type: 'date'
+                },
+                yaxis: {
+                    gridcolor: 'rgba(255,255,255,0.1)',
+                    showgrid: true,
+                    domain: [0.5, 1]
+                },
+                yaxis2: {
+                    title: 'RSI',
+                    gridcolor: 'rgba(255,255,255,0.1)',
+                    showgrid: true,
+                    domain: [0.25, 0.45]
+                },
+                yaxis3: {
+                    title: 'MACD',
+                    gridcolor: 'rgba(255,255,255,0.1)',
+                    showgrid: true,
+                    domain: [0, 0.2]
+                },
+                showlegend: true,
+                legend: {
+                    x: 0,
+                    y: 1,
+                    font: {
+                        color: '#ffffff'
+                    }
+                },
+                margin: {
+                    l: 50,
+                    r: 50,
+                    t: 30,
+                    b: 50
+                }
+            };
+            
+            // Grafikleri çiz
+            const traces = [
+                priceTrace, bbUpperTrace, bbMiddleTrace, bbLowerTrace,
+                rsiTrace,
+                macdTrace, macdSignalTrace
+            ];
+            
+            if (!priceChart) {
+                Plotly.newPlot('price-chart', traces, layout);
+                priceChart = document.getElementById('price-chart');
+            } else {
+                Plotly.update('price-chart', {
+                    x: [
+                        chartData.index, chartData.index, chartData.index, chartData.index,
+                        chartData.index,
+                        chartData.index, chartData.index
+                    ],
+                    y: [
+                        chartData.close, chartData.BB_upper, chartData.BB_middle, chartData.BB_lower,
+                        chartData.RSI,
+                        chartData.MACD, chartData.MACD_Signal
+                    ]
+                });
+            }
+        }
+        
+        function updateUI(data) {
+            try {
+                // Veri doğrulama
+                if (!data || !data.market_data || !data.position || !data.ai_metrics || !data.risk_metrics) {
+                    console.error('Geçersiz veri formatı:', data);
+                    return;
+                }
+
+                debugLog('Updating UI with data:', data);
+                
+                // Son güncelleme zamanını güncelle
+                document.getElementById('last-update').textContent = data.market_data.timestamp;
+                
+                // Fiyat ve pozisyon bilgilerini güncelle
+                if (data.market_data.price) {
+                    document.getElementById('current-price').textContent = data.market_data.price.toFixed(2);
+                }
+                
+                document.getElementById('position-type').textContent = data.position.type || 'Yok';
+                document.getElementById('position-size').textContent = data.position.size || '0';
+                document.getElementById('entry-price').textContent = data.position.entry_price ? data.position.entry_price.toFixed(2) : '-';
+                
+                // PNL hesapla ve göster
+                if (data.position.entry_price && data.position.size > 0) {
+                    const pnl = data.position.pnl;
+                    const pnlElement = document.getElementById('position-pnl');
+                    pnlElement.textContent = pnl.toFixed(2) + '%';
+                    pnlElement.className = pnl >= 0 ? 'value positive' : 'value negative';
+                } else {
+                    document.getElementById('position-pnl').textContent = '-';
+                }
+                
+                // Piyasa durumu
+                if (data.market_data.market_state) {
+                    const state = data.market_data.market_state;
+                    document.getElementById('market-trend').textContent = state.trend || '-';
+                    document.getElementById('market-volatility').textContent = state.volatility || '-';
+                    
+                    // İndikatör değerleri
+                    if (state.rsi) document.getElementById('rsi-value').textContent = state.rsi.toFixed(2);
+                    if (state.macd) document.getElementById('macd-value').textContent = state.macd.toFixed(2);
+                    if (state.macd_signal) document.getElementById('macd-signal-value').textContent = state.macd_signal.toFixed(2);
+                }
+                
+                // AI metriklerini güncelle
+                if (data.ai_metrics) {
+                    if (data.ai_metrics.confidence) {
+                        document.getElementById('ai-confidence').textContent = (data.ai_metrics.confidence * 100).toFixed(2) + '%';
+                    }
+                    if (data.ai_metrics.success_rate) {
+                        document.getElementById('ai-success-rate').textContent = data.ai_metrics.success_rate.toFixed(2) + '%';
+                    }
+                }
+                
+                // Risk metriklerini güncelle
+                if (data.risk_metrics && data.risk_metrics.risk_level) {
+                    document.getElementById('risk-level').textContent = data.risk_metrics.risk_level;
+                }
+                
+                // Grafikleri güncelle
+                if (data.market_data.chart_data) {
+                    createCharts(data.market_data.chart_data);
+                }
+                
+            } catch (error) {
+                console.error('UI güncelleme hatası:', error);
+                debugLog('UI güncelleme hatası:', error);
+            }
+        }
+        
+        // Socket.io event listeners
+        socket.on('connect', () => {
+            console.log('WebSocket bağlantısı kuruldu');
+        });
+        
+        socket.on('initial_data', (data) => {
+            console.log('İlk veriler alındı:', data);
+            updateUI(data);
+        });
+        
+        socket.on('update_data', (data) => {
+            console.log('Veriler güncellendi:', data);
+            updateUI(data);
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('WebSocket bağlantısı kesildi');
+        });
+        
+        socket.on('error', (error) => {
+            console.error('WebSocket hatası:', error);
+        });
+    </script>
+</body>
+</html>
